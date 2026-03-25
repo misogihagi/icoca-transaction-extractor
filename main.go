@@ -1,12 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"encoding/csv"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/playwright-community/playwright-go"
 	"gopkg.in/yaml.v3"
@@ -25,6 +26,16 @@ func loadConfig(path string) (Config, error) {
 	}
 	err = yaml.Unmarshal(data, &config)
 	return config, err
+}
+
+func getOTP() (string, error) {
+	fmt.Print("Enter the OTP (One-Time Password) from your email/SMS: ")
+	reader := bufio.NewReader(os.Stdin)
+	otp, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(otp), nil
 }
 
 func main() {
@@ -123,18 +134,38 @@ func main() {
 		// Try clicking the login button
 		log.Println("Submitting login form...")
 		loginBtn := page.Locator("button.c-btn__link")
-		count, _ := loginBtn.Count()
-		if count > 0 {
-			err = loginBtn.First().Click()
-			if err != nil {
-				log.Fatalf("Could not click login button: %v", err)
-			}
-		} else {
-			err = page.Locator("#textPassword").Press("Enter")
-			if err != nil {
-				log.Fatalf("Could not submit form: %v", err)
-			}
+		err = loginBtn.First().Click()
+		if err != nil {
+			log.Fatalf("Could not click login button: %v", err)
 		}
+		button := page.GetByRole("button", playwright.PageGetByRoleOptions{
+			Name: "送信",
+		})
+		err = button.Click()
+		if err != nil {
+			log.Fatalf("Could not send OTP: %v", err)
+		}
+
+		otp, err := getOTP()
+		if err != nil {
+			log.Fatalf("Could not get OTP: %v", err)
+		}
+
+		otpField := page.Locator("input#label-one-pass")
+		err = otpField.Fill(otp)
+		if err != nil {
+			log.Fatalf("Could not fill OTP: %v", err)
+		}
+		nextButton := page.GetByRole("button", playwright.PageGetByRoleOptions{
+			Name: "次へ",
+		})
+		err = nextButton.Click()
+		if err != nil {
+			log.Fatalf("Could not click next button: %v", err)
+		}
+
+		log.Println("OTP submitted.")
+		page.WaitForLoadState()
 	} else {
 		log.Println("Login page not detected. Proceeding to history extraction (site may be already authenticated or structure changed).")
 	}
@@ -163,8 +194,10 @@ func main() {
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
+	log.Println("Waiting for page to be ready...")
 	page.WaitForLoadState()
-	time.Sleep(30 * time.Second)
+
+	// Wait for the main content to appear (either dropdown or some other indicator)
 	log.Println("Checking for available months...")
 	dropdown := page.Locator("select[name='ymref']")
 	err = dropdown.WaitFor(playwright.LocatorWaitForOptions{
