@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/playwright-community/playwright-go"
 	"gopkg.in/yaml.v3"
@@ -162,22 +163,26 @@ func main() {
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
+	page.WaitForLoadState()
+	time.Sleep(30 * time.Second)
 	log.Println("Checking for available months...")
 	dropdown := page.Locator("select[name='ymref']")
 	err = dropdown.WaitFor(playwright.LocatorWaitForOptions{
-		State:   playwright.WaitForSelectorStateVisible,
+		State:   playwright.WaitForSelectorStateAttached,
 		Timeout: playwright.Float(10000), // 10s timeout
 	})
 
 	var months []string
+	if err != nil {
+		log.Fatal("months could not be found")
+	}
+	options, err := dropdown.Locator("option").All()
+	log.Println("Found", len(options), "months")
 	if err == nil {
-		options, err := dropdown.Locator("option").All()
-		if err == nil {
-			for _, opt := range options {
-				val, err := opt.GetAttribute("value")
-				if err == nil && val != "" {
-					months = append(months, val)
-				}
+		for _, opt := range options {
+			val, err := opt.GetAttribute("value")
+			if err == nil && val != "" {
+				months = append(months, val)
 			}
 		}
 	}
@@ -215,6 +220,7 @@ func main() {
 		if err == nil {
 			log.Printf("Clicking 'Search' to display history for %s...", monthVal)
 			err = searchBtn.First().Click()
+			page.WaitForLoadState()
 			if err != nil {
 				log.Printf("Warning: Could not click search button: %v", err)
 			}
