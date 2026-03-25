@@ -74,13 +74,24 @@ func main() {
 	}
 	defer browser.Close()
 
-	context, err := browser.NewContext()
+	storageStatePath := "state.json"
+	needSave := false
+	var context playwright.BrowserContext
+	if _, err := os.Stat(storageStatePath); err == nil {
+		// Load existing storage state
+		context, err = browser.NewContext(playwright.BrowserNewContextOptions{StorageStatePath: playwright.String(storageStatePath)})
+	} else {
+		// No storage state file, create new context and will save after login
+		context, err = browser.NewContext()
+		needSave = true
+	}
 	if err != nil {
 		log.Fatalf("Could not create context: %v", err)
 	}
 	defer context.Close()
 
 	page, err := context.NewPage()
+
 	if err != nil {
 		log.Fatalf("Could not create page: %v", err)
 	}
@@ -125,6 +136,15 @@ func main() {
 		}
 	} else {
 		log.Println("Login page not detected. Proceeding to history extraction (site may be already authenticated or structure changed).")
+	}
+
+	// Save storage state after successful login if needed
+	if needSave {
+		if _, err := context.StorageState(storageStatePath); err != nil {
+			log.Printf("Warning: could not save storage state: %v", err)
+		} else {
+			log.Println("Saved storage state to", storageStatePath)
+		}
 	}
 
 	file, err := os.Create(*outputFlag)
@@ -191,7 +211,7 @@ func main() {
 			State:   playwright.WaitForSelectorStateVisible,
 			Timeout: playwright.Float(30000), // 30s timeout
 		})
-		
+
 		if err == nil {
 			log.Printf("Clicking 'Search' to display history for %s...", monthVal)
 			err = searchBtn.First().Click()
@@ -244,7 +264,7 @@ func main() {
 			if err != nil {
 				continue
 			}
-			
+
 			// Skip header row for subsequent tables to avoid duplicating the header in CSV
 			if !isFirstTable && idx == 0 {
 				continue
