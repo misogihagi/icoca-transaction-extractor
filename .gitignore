@@ -1,0 +1,19 @@
+# Sensitive files and generated data
+config.yaml
+state.json
+history.csv
+
+# Compiled binaries
+conf
+icoca-transaction-extractor
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+
+# Go coverage output
+*.out
